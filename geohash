@@ -1,0 +1,62 @@
+#!/bin/bash
+# calculate geohash
+# geohash is set of coordinates derived from current time pseudorandomly
+# geohash <-r km>[ -x latitude -y longitude | -l place][-u]
+# inputs: 
+#   -r ray in km 
+#   -x starting point latitude (WGS) 
+#   -y starting point longitude (WGS) 
+#   -l location (predefined starting points)
+#   -u open map with coordiates in default browser
+# outputs:
+#   degrees_azimuth ray_km (target vector) 
+#   longitude latitude  (target coordinates in WGS)
+#   url (maps.lt with target coordinates can be autoopened in -u is enabled)
+
+# use getopts
+while getopts "x:y:l:r:u" OPTION
+do
+  case "$OPTION" in
+    x) startx=$OPTARG;;
+    y) starty=$OPTARG;;
+    l) startloc=$OPTARG;;
+    r) range=$OPTARG;;
+    u) url=1;;
+  esac
+done 
+# echo $startx', '$starty', '$startloc', '$range # debug output
+x=$startx
+y=$starty
+case "$startloc" in
+#corfinates for -l aption
+'xi20')
+  y=54.673641
+  x=25.277465 ;;
+'namai')
+  y=54.517805 
+  x=25.243569;;
+'')
+  echo "please specify location"
+  exit 1;;
+*)
+  echo "there is no such location in predefined list"
+  exit 1;;
+esac
+
+# MD5sum current time and use it as psudo random seed
+# TODO: detox the code so that functions dont duplicate. WHYNOT: printf doesnt eat big numbers
+varphi=$(printf '0.%d\n' 0x`date +%s.%N | md5sum | cut -c 1-5`) 
+r=$(printf '0.%d\n' 0x`date +%s.%N | md5sum | cut -c 6-10`)
+phi=`echo "$varphi*360" | bc -l`
+r=`echo "$r*$range" | bc -l`
+echo $phi', '$r #target vector
+cordy=`echo "scale=10; $r/111.12*c(4*a(1)*$varphi)+$y" | bc -l` #4*a(1) =pi r/111.12 to konvert to degrees
+cordx=`echo "scale=10; $r/111.12*s(4*a(1)*$varphi)+$x" | bc -l`
+cordx=`printf '%f\n' "$cordx"` # bc output is .534 style fix to 0.534
+cordy=`printf '%f\n' "$cordy"`
+echo $cordy', '$cordx # Coordinates in WGS
+echo "http://www.maps.lt/map/default.aspx#q=$cordy,%20$cordx" #TODO: make an option to use diferent services
+if [ $url ] #open webmap with target coordinates if -u flag enabled
+  then
+	xdg-open "http://www.maps.lt/map/default.aspx#q=$cordy,%20$cordx"
+fi
